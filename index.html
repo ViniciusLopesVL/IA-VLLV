@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GOlife · VLLV Orquestrador</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&family=Orbitron:wght@400;500;700;900&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -198,8 +199,12 @@ body.phase-brain .sys-label,body.phase-brain .growth,body.phase-brain .top-ctrl,
 .kb-topics{display:flex;flex-direction:column;gap:8px;}
 .kb-topic{background:rgba(255,255,255,.04);border:1px solid rgba(167,139,250,.2);border-left:3px solid var(--persona);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--text);line-height:1.5;display:flex;align-items:flex-start;gap:8px;}
 .kb-topic .kb-bullet{color:var(--persona);flex-shrink:0;}
-.kb-topic .kb-rm{margin-left:auto;background:none;border:none;color:rgba(255,255,255,.25);cursor:pointer;font-size:14px;flex-shrink:0;}
+.kb-topic .kb-rm{margin-left:6px;background:none;border:none;color:rgba(255,255,255,.25);cursor:pointer;font-size:14px;flex-shrink:0;}
 .kb-topic .kb-rm:hover{color:#ff6b8a;}
+.kb-vis{margin-left:auto;flex-shrink:0;border:none;border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:600;cursor:pointer;letter-spacing:.2px;}
+.kb-vis.privado{background:rgba(255,107,122,.18);color:#ff8f9b;}
+.kb-vis.familia{background:rgba(255,193,94,.18);color:#ffcf7a;}
+.kb-vis.publico{background:rgba(94,224,168,.18);color:#7fe8bf;}
 .kb-empty{color:var(--dim);font-size:12px;text-align:center;padding:24px 12px;line-height:1.6;}
 .kb-add{flex-shrink:0;padding:14px;border-top:1px solid rgba(77,232,255,.12);display:flex;gap:8px;}
 .kb-input{flex:1;background:rgba(255,255,255,.06);border:1.5px solid rgba(167,139,250,.3);border-radius:12px;padding:10px 14px;font-size:13px;color:#fff;outline:none;font-family:'Inter',sans-serif;}
@@ -235,9 +240,55 @@ body.phase-brain .sys-label,body.phase-brain .growth,body.phase-brain .top-ctrl,
   .voice-chip{font-size:14px;padding:11px 18px;}
   .panel{width:420px;}.kb-panel{width:440px;}
 }
+/* ═══════════ LOGIN / NUVEM (Supabase) ═══════════ */
+#auth-overlay{position:fixed;inset:0;z-index:9000;background:radial-gradient(900px 600px at 70% -10%,#13203b,#040b1e 60%);
+  display:none;align-items:center;justify-content:center;padding:20px;}
+#auth-overlay.show{display:flex;}
+.auth-box{width:100%;max-width:360px;background:rgba(14,21,38,.92);border:1px solid rgba(77,163,255,.25);
+  border-radius:18px;padding:26px 22px;backdrop-filter:blur(8px);box-shadow:0 20px 60px rgba(0,0,0,.5);}
+.auth-logo{width:54px;height:54px;border-radius:50%;margin:0 auto 14px;
+  background:conic-gradient(from 210deg,#4de8ff,#a78bfa,#4de8ff);box-shadow:0 0 28px rgba(77,232,255,.5);
+  display:grid;place-items:center;color:#fff;font-weight:800;font-family:'Orbitron',sans-serif;font-size:14px;}
+.auth-box h2{text-align:center;font-size:17px;margin-bottom:4px;font-weight:600;}
+.auth-box .auth-sub{text-align:center;color:var(--dim);font-size:12.5px;margin-bottom:18px;}
+.auth-box label{display:block;font-size:11px;color:var(--dim);margin:12px 0 4px;letter-spacing:.3px;}
+.auth-box input{width:100%;background:rgba(255,255,255,.05);border:1.5px solid rgba(167,139,250,.3);
+  color:#fff;padding:11px 13px;border-radius:11px;font-size:14px;outline:none;font-family:'Inter',sans-serif;}
+.auth-box input:focus{border-color:var(--cy);}
+.auth-btn{width:100%;margin-top:18px;background:linear-gradient(135deg,#4de8ff,#a78bfa);border:0;color:#042;
+  font-weight:700;padding:12px;border-radius:12px;cursor:pointer;font-size:14px;}
+.auth-btn:disabled{opacity:.55;cursor:wait;}
+.auth-toggle{text-align:center;margin-top:14px;font-size:12.5px;color:var(--dim);}
+.auth-toggle a{color:var(--cy);cursor:pointer;text-decoration:underline;}
+.auth-msg{text-align:center;font-size:12.5px;margin-top:12px;min-height:16px;}
+.auth-msg.err{color:#ff8f9b;} .auth-msg.ok{color:#7fe8bf;}
+.auth-skip{text-align:center;margin-top:16px;font-size:11.5px;}
+.auth-skip a{color:var(--dim);cursor:pointer;text-decoration:underline;}
+.cloud-chip{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:5px;}
 </style>
 </head>
 <body>
+<!-- ═══════════ TELA DE LOGIN (Supabase) ═══════════ -->
+<div id="auth-overlay">
+  <div class="auth-box">
+    <div class="auth-logo">VLLV</div>
+    <h2 id="auth-title">Entrar na sua conta</h2>
+    <div class="auth-sub" id="auth-sub">Seu eu digital, seguro e sincronizado na nuvem.</div>
+    <label>E-mail</label>
+    <input id="auth-email" type="email" autocomplete="email" placeholder="voce@email.com">
+    <label>Senha</label>
+    <input id="auth-pass" type="password" autocomplete="current-password" placeholder="••••••••">
+    <button class="auth-btn" id="auth-btn" onclick="Auth.submit()">Entrar</button>
+    <div class="auth-msg" id="auth-msg"></div>
+    <div class="auth-toggle" id="auth-toggle">
+      Não tem conta? <a onclick="Auth.toggleMode()">Criar agora</a>
+    </div>
+    <div class="auth-skip">
+      <a onclick="Auth.skip()">Usar sem conta (só neste aparelho)</a>
+    </div>
+  </div>
+</div>
+
 <canvas id="brain"></canvas>
 <!-- vídeo do "eu digital" na Fase 1 (bordas dissolvidas para fundir no fundo) -->
 <div id="brain-video-wrap"><video id="brain-video" muted playsinline preload="auto"></video></div>
@@ -255,6 +306,7 @@ body.phase-brain .sys-label,body.phase-brain .growth,body.phase-brain .top-ctrl,
   <span id="gd-wrap" style="display:none;align-items:center;gap:6px;">
     <button class="ctrl-btn" id="gd-btn" onclick="gdToggle()" title="Conectar Google Drive">☁️</button>
   </span>
+  <button class="ctrl-btn" id="logout-btn" onclick="Auth.logout()" title="Sair da conta" style="display:none">🚪</button>
   <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="importMemory(event)">
 </div>
 <div id="gd-status" style="position:fixed;top:56px;right:16px;z-index:19;font-size:10px;color:var(--dim);letter-spacing:.5px;opacity:.85;"></div>
@@ -339,6 +391,92 @@ const IMG_BRAIN="data:image/webp;base64,UklGRtydAABXRUJQVlA4WAoAAAAQAAAAKwEAFQEA
 // Hierarquia: VLLV (orquestrador) → Personas → Nós de conhecimento → folhas
 // ═══════════════════════════════════════════════════════════
 let ttsOn=true,isListening=false,recognition=null,voices=[],voiceIdx=0,selectedVoice=null;
+// ═══════════════════════════════════════════════════════════════════
+// VLLV CLOUD — Supabase (login + sync). Camada OPCIONAL: o app funciona
+// 100% offline (IndexedDB + Drive) mesmo sem login. Cloud é por cima.
+// ═══════════════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://guhbprmutwjjsprpruez.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1aGJwcm11dHdqanNwcnBydWV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxMDYwNjcsImV4cCI6MjEwODY4MjA2N30.-hCJgj5_Qt5Crt7UoNycd1Q3t0DUbvxGJTEpW4tvTuY';
+let SB = null;           // cliente supabase
+let sbUser = null;       // usuário logado (auth)
+let sbPerfil = null;     // linha t_prf_perfil do usuário
+function sbReady(){ return !!(window.supabase && SUPABASE_URL && SUPABASE_ANON); }
+function initSupabase(){
+  if(SB || !sbReady()) return SB;
+  try{ SB = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {auth:{persistSession:true,autoRefreshToken:true}}); }
+  catch(e){ console.warn('[VLLV] Supabase não iniciou:', e.message); }
+  return SB;
+}
+
+const Auth = {
+  mode:'login', // 'login' | 'signup'
+  show(){ document.getElementById('auth-overlay').classList.add('show'); },
+  hide(){ document.getElementById('auth-overlay').classList.remove('show'); },
+  msg(t,cls){ const m=document.getElementById('auth-msg'); m.textContent=t||''; m.className='auth-msg '+(cls||''); },
+  toggleMode(){
+    this.mode = this.mode==='login'?'signup':'login';
+    document.getElementById('auth-title').textContent = this.mode==='login'?'Entrar na sua conta':'Criar sua conta';
+    document.getElementById('auth-btn').textContent   = this.mode==='login'?'Entrar':'Criar conta';
+    document.getElementById('auth-toggle').innerHTML  = this.mode==='login'
+      ? 'Não tem conta? <a onclick="Auth.toggleMode()">Criar agora</a>'
+      : 'Já tem conta? <a onclick="Auth.toggleMode()">Entrar</a>';
+    document.getElementById('auth-pass').setAttribute('autocomplete', this.mode==='login'?'current-password':'new-password');
+    this.msg('');
+  },
+  async submit(){
+    const email=document.getElementById('auth-email').value.trim();
+    const pass=document.getElementById('auth-pass').value;
+    if(!email||!pass){ this.msg('Preencha e-mail e senha.','err'); return; }
+    if(!initSupabase()){ this.msg('Nuvem indisponível agora. Você pode usar sem conta.','err'); return; }
+    const btn=document.getElementById('auth-btn'); btn.disabled=true;
+    const antes=btn.textContent; btn.textContent='aguarde…';
+    try{
+      let res;
+      if(this.mode==='signup'){
+        res = await SB.auth.signUp({email, password:pass});
+        if(res.error) throw res.error;
+        if(res.data.user && !res.data.session){
+          this.msg('Conta criada! Confira seu e-mail para confirmar e depois entre.','ok');
+          this.mode='login'; btn.disabled=false; btn.textContent='Entrar'; return;
+        }
+      }else{
+        res = await SB.auth.signInWithPassword({email, password:pass});
+        if(res.error) throw res.error;
+      }
+      sbUser = res.data.user;
+      await onLoggedIn();
+    }catch(e){
+      const map={'Invalid login credentials':'E-mail ou senha incorretos.','User already registered':'Esse e-mail já tem conta. Faça login.','Email not confirmed':'Confirme seu e-mail antes de entrar.'};
+      this.msg(map[e.message]||e.message,'err');
+      btn.disabled=false; btn.textContent=antes;
+    }
+  },
+  skip(){ // usar sem conta: segue só com IndexedDB/Drive (comportamento antigo)
+    try{ localStorage.setItem('vllv_skip_auth','1'); }catch(e){}
+    this.hide(); bootLocal();
+  },
+  async logout(){
+    try{ if(SB) await SB.auth.signOut(); }catch(e){}
+    sbUser=null; sbPerfil=null;
+    try{ localStorage.removeItem('vllv_skip_auth'); }catch(e){}
+    location.reload();
+  }
+};
+
+// chamado após login bem-sucedido: carrega/garante o perfil e inicia o app
+async function onLoggedIn(){
+  Auth.hide();
+  try{
+    const { data:perfil } = await SB.from('t_prf_perfil').select('*').eq('prf_auth_uid', sbUser.id).maybeSingle();
+    sbPerfil = perfil || null;
+    // nome do perfil (se houver) alimenta o app
+    if(sbPerfil && sbPerfil.prf_nome && !userName) userName = sbPerfil.prf_nome;
+  }catch(e){ console.warn('[VLLV] perfil:', e.message); }
+  const lb=document.getElementById('logout-btn'); if(lb) lb.style.display='grid'; // mostra "sair"
+  bootLocal(); // inicia o app normalmente (visual + dados locais)
+  // (a sincronização pes_conhecimento ↔ Supabase entra no próximo passo)
+}
+
 let mode='ambient';let coreState='idle';let detailId=null;
 let agentName='VLLV';let userName=null;let chatLog=[];
 let pendingRoute=null; // {sub, text} aguardando cascata de destino
@@ -469,9 +607,82 @@ const Learn=(()=>{
         const base=node.role?`${node.label} (${node.role})`:node.label;
         await this.remember(base,node.id,'rede'); n++;
         // tópicos do nó
-        if(Array.isArray(node.topics)) for(const t of node.topics){ await this.remember(t,node.id,'rede'); n++; }
+        if(Array.isArray(node.topics)) for(const t of node.topics){ await this.remember(topicText(t),node.id,'rede'); n++; }
       }
       return n;
+    }
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════════
+   INTEL — motor de inteligência (migrado do piloto)
+   • limiar ajustável (não cravado)   • visibilidade 3 níveis
+   • busca híbrida (léxico+semântico)  • trava fallback em dado pessoal
+   • gancho para a Edge Function do Gemini (produção)
+   Convenção: tópicos agora podem ser string (legado) OU {t, vis}.
+   topicText()/topicVis() leem os dois formatos sem quebrar nada.
+══════════════════════════════════════════════════════════════════ */
+function topicText(x){ return typeof x==='string'? x : (x&&x.t)||''; }
+function topicVis(x){  return (x&&typeof x==='object'&&x.vis) || 'familia'; } // legado vira "familia"
+
+const Intel = (()=>{
+  const CFG = { LIMIAR:0.42, DIM:256 };           // limiar do score híbrido (ajustável)
+  const STOP = new Set('de da do das dos a o e que com para em no na os as um uma minha meu minhas meus seu sua qual quais é são ser tem meu'.split(' '));
+  const norm = t => (t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+  const toks = t => norm(t).split(' ').filter(w=>w&&!STOP.has(w));
+  function embed(text){
+    const v=new Float32Array(CFG.DIM);
+    for(const w of toks(text)){
+      for(let n=0;n<=1;n++){ const key=n? w.slice(0,Math.max(3,w.length-2)) : w;
+        let h=2166136261; for(let i=0;i<key.length;i++){h^=key.charCodeAt(i);h=Math.imul(h,16777619);}
+        v[(h>>>0)%CFG.DIM]+=1; }
+    }
+    let mag=0; for(const x of v) mag+=x*x; mag=Math.sqrt(mag)||1;
+    for(let i=0;i<v.length;i++) v[i]/=mag; return v;
+  }
+  const cos=(a,b)=>{let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s;};
+  // score híbrido: metade semântico (cosseno) + metade léxico (sobreposição)
+  function score(pergAttr, conteudo){
+    const cosS=cos(embed(pergAttr), embed(conteudo));
+    const A=new Set(toks(pergAttr)), B=new Set(toks(conteudo));
+    if(!A.size) return cosS;
+    let inter=0; A.forEach(w=>{ if(B.has(w)) inter++; });
+    return 0.5*cosS + 0.5*(inter/A.size);
+  }
+  // classifica a sensibilidade de um fato (o usuário pode corrigir depois)
+  function classifica(texto){
+    const t=' '+(texto||'').toLowerCase()+' ';
+    if(/senha|segredo|sigilo|cpf|rg|cart[aã]o|conta banc|pix|or[ií]entação|ínt[ií]m|privad|telefone|whatsapp|endere[çc]o/.test(t)) return 'privado';
+    if(/gosta|prefere|odeia|detesta|adora|ama|curte|anivers|nasceu|mora|viaj|viagem|passeio|f[eé]rias|lazer|hobby|sa[uú]de|m[eé]dic|consulta|fam[ií]lia|filh|esposa|marido|trabalha|estuda/.test(t)) return 'familia';
+    return 'publico';
+  }
+  // extrai o ATRIBUTO da pergunta: tira nome, papel, possessivos, interrogativos
+  const INTERROG=/\b(o que|que|qual|quais|quando|onde|quem|por que|porque|me fala|me diz|me conta|sabe|sobre)\b/gi;
+  function atributo(frase, nomeAlvo, papel){
+    let s=' '+frase+' ';
+    if(nomeAlvo) s=s.replace(new RegExp('\\b'+nomeAlvo.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','ig'),' ');
+    if(papel)    s=s.replace(new RegExp('\\b'+papel+'\\w*\\b','ig'),' ');
+    s=s.replace(/\b(minha|meu|minhas|meus)\b/ig,' ').replace(/\?/g,' ').replace(INTERROG,' ');
+    s=s.replace(/\s+/g,' ').trim();
+    return s||frase;
+  }
+  // dado o nó-sujeito e a pergunta: acha o melhor tópico e a confiança
+  function melhorTopico(node, frase){
+    const attr=atributo(frase, node.label, node.role);
+    const tops=(node.topics||[]);
+    let best=null, bs=-1;
+    tops.forEach(tp=>{ const s=score(attr, topicText(tp)); if(s>bs){bs=s;best=tp;} });
+    return { topico:best, conf:bs<0?0:bs, attr };
+  }
+  return {
+    CFG, classifica, melhorTopico, score,
+    get LIMIAR(){return CFG.LIMIAR;}, set LIMIAR(v){CFG.LIMIAR=v;},
+    // GANCHO do fallback — hoje devolve null (sem backend); em produção chama a Edge Function.
+    // pessoal=true só é chamado APÓS autorização explícita do usuário.
+    async fallback(pergunta, pessoal){
+      // TODO(produção): fetch da Edge Function do Supabase (a chave do Gemini vive lá, nunca aqui).
+      //   const r = await fetch(EDGE_URL+'/ia', {method:'POST', body:JSON.stringify({q:pergunta, pessoal})});
+      return null; // sinaliza: ainda não conectado
     }
   };
 })();
@@ -733,10 +944,15 @@ function findSubjectNode(text){
   }
   return null;
 }
-function addTopic(node,topicText){
+function addTopic(node,txt,vis){
   if(!node.topics)node.topics=[];
-  const t=cap(topicText);
-  if(!node.topics.includes(t)){node.topics.push(t);Learn.remember(t,node.id,'conversa');} // APRENDE: grava o fato na memória semântica
+  const t=cap(txt);
+  const already=node.topics.some(x=>topicText(x).toLowerCase()===t.toLowerCase());
+  if(!already){
+    const visibilidade = vis || Intel.classifica(t);          // classifica sozinho se não vier definido
+    node.topics.push({t, vis:visibilidade});                  // novo formato {t, vis}
+    Learn.remember(t,node.id,'conversa');                     // APRENDE: grava na memória semântica
+  }
   // vira nó de conhecimento (deixa de ser folha) para poder abrir o painel
   if(node.kind==='leaf')node.kind='knowledge';
   rebuildPositions();updateCount();
@@ -1189,7 +1405,22 @@ function answerQuery(question){
     showCaptionHTML(r.replace(/\n/g,'<br>'));addChat('ai',r);speak(`Encontrei ${hits.length} coisas relacionadas.`);
     return;
   }
-  // 3) nada encontrado
+  // 3) nada encontrado — SEM sujeito pessoal: é tema geral/público.
+  //    Aqui o fallback externo é permitido (não é dado pessoal travado).
+  const ehGeral = !/\b(?:minha|meu)\b/i.test(low);
+  if(ehGeral){
+    _pendingFallback={pergunta:question, nome:null};
+    const r=`Não tenho isso na sua base. Como é um tema geral, posso buscar fora.`;
+    showCard({
+      head:'🌐 Tema geral não encontrado',
+      text:r,
+      btns:[
+        {label:'Pesquisar no Gemini',primary:true,action:async()=>{closeCard();await rodarFallback(false);}},
+        {label:'Eu te ensino',ghost:true,action:()=>{closeCard();_pendingFallback=null;const m='Pode me contar que eu memorizo.';showCaption(m);addChat('ai',m);}}
+      ]
+    });
+    addChat('ai',r);speak(r);return;
+  }
   const r=userName?`${userName}, ainda não tenho nada guardado sobre isso. Me conte que eu memorizo.`:'Ainda não tenho isso guardado. Me conte que eu memorizo.';
   showCaption(r);addChat('ai',r);speak(r);
 }
@@ -1198,18 +1429,67 @@ function answerAboutSubject(node,question){
   const topics=node.topics||[];
   const rel=node.role?` (${node.role})`:'';
   const parent=nodeById(node.parent);
-  // filtro por tema se a pergunta pede algo específico
   const low=question.toLowerCase();
-  let filtered=topics;
-  for(const k in SYN){ if(SYN[k].some(s=>low.includes(s))){ filtered=topics.filter(t=>SYN[k].some(s=>t.toLowerCase().includes(s))); break; } }
+
+  // pergunta GENÉRICA ("o que sei sobre X?") → lista tudo; ESPECÍFICA ("o que X gosta?") → usa limiar
+  const generica=/\b(o que sei|o que voc[eê]|tudo|me fala|me conta|quem [eé]|fala sobre)\b/i.test(low)
+                 || atributoVazio(question,node);
   if(!topics.length){
-    const r=`Sei que ${node.label}${rel} está em ${parent?parent.label:'sua rede'}, mas ainda não anotei detalhes. Me conte sobre ${node.label}.`;
+    // não sei nada desta pessoa → TRAVA e pergunta (dado pessoal não vai ao fallback sozinho)
+    return travarPessoal(node.label, question);
+  }
+  if(generica){
+    const list=topics.map(t=>`• ${topicText(t)} ${visBadge(topicVis(t))}`).join('\n');
+    const r=`O que sei sobre ${node.label}${rel}:\n${list}`;
+    showCaptionHTML(r.replace(/\n/g,'<br>'));addChat('ai',r.replace(/\s*\[[^\]]+\]/g,''));
+    speak(`Sobre ${node.label}: ${topics.slice(0,3).map(topicText).join(', ')}`);
+    return;
+  }
+  // pergunta específica → melhor tópico pelo score híbrido
+  const {topico,conf}=Intel.melhorTopico(node,question);
+  if(topico && conf>=Intel.LIMIAR){
+    const r=`${node.label}${rel}: ${topicText(topico)}`;
+    showCaption(r);addChat('ai',r);speak(r);
+    return;
+  }
+  // abaixo do limiar e é pessoa → TRAVA e pergunta
+  return travarPessoal(node.label, question);
+}
+// a pergunta não tem atributo útil (só cita a pessoa)? então é genérica
+function atributoVazio(question,node){
+  const a=Intel.melhorTopico(node,question).attr;
+  return !a || Intel.score(a,a)===0 || a.split(' ').every(w=>w.length<3);
+}
+// selo visual do nível de visibilidade (texto, pois a legenda já ensina as cores)
+function visBadge(v){ return v==='privado'?'[privado]':v==='publico'?'[público]':'[família]'; }
+
+// TRAVA: dado pessoal desconhecido NÃO vai ao fallback sozinho — pergunta ao usuário.
+function travarPessoal(nome, pergunta){
+  _pendingFallback={pergunta, nome};
+  const m=`Não encontrei isso sobre ${nome} na sua base. O que faço?`;
+  showCardFallback(nome,m);
+  addChat('ai',m);speak(m);
+}
+let _pendingFallback=null;
+function showCardFallback(nome,msg){
+  showCard({
+    head:`🔒 Dado pessoal não encontrado`,
+    text:msg,
+    btns:[
+      {label:'Me ensina',primary:true,action:()=>{closeCard();const r=`Então me conte. Ex.: "${nome} ${/anivers/i.test((_pendingFallback&&_pendingFallback.pergunta)||'')?'nasceu em ...':'gosta de ...'}". Eu guardo.`;showCaption(r);addChat('ai',r);speak(r);}},
+      {label:'Pesquisar no Gemini',action:async()=>{closeCard();await rodarFallback(true);}},
+      {label:'Deixa pra lá',ghost:true,action:()=>{closeCard();_pendingFallback=null;const r='Tudo bem, não consultei nada externo.';showCaption(r);addChat('ai',r);}}
+    ]
+  });
+}
+async function rodarFallback(pessoalAutorizado){
+  const p=_pendingFallback; _pendingFallback=null; if(!p)return;
+  const resp=await Intel.fallback(p.pergunta, pessoalAutorizado);
+  if(resp==null){
+    const r='A busca externa (Gemini) ainda não está ligada neste app — isso entra na fase do backend seguro. Por ora, me ensine o dado que eu guardo.';
     showCaption(r);addChat('ai',r);speak(r);return;
   }
-  const list=(filtered.length?filtered:topics).map(t=>`• ${t}`).join('\n');
-  const head=filtered.length&&filtered!==topics?`Sobre isso, de ${node.label}${rel}:`:`O que sei sobre ${node.label}${rel}:`;
-  const r=`${head}\n${list}`;
-  showCaptionHTML(r.replace(/\n/g,'<br>'));addChat('ai',r);speak(`Sobre ${node.label}: ${(filtered.length?filtered:topics).slice(0,3).join(', ')}`);
+  showCaption(resp);addChat('ai',resp);speak(resp);
 }
 // busca em toda a memória (pessoas, tópicos, nós) por termos
 function searchAll(terms){
@@ -1222,14 +1502,21 @@ function searchAll(terms){
     if(terms.some(t=>n.label.toLowerCase().includes(t)))hits.push({where:parent?parent.label:'rede',text:n.label});
     // tópicos
     (n.topics||[]).forEach(top=>{
-      if(terms.some(t=>top.toLowerCase().includes(t)))hits.push({where:n.label,text:top});
+      const txt=topicText(top);
+      if(terms.some(t=>txt.toLowerCase().includes(t)))hits.push({where:n.label,text:txt});
     });
   });
   // dedup
   const seen=new Set();return hits.filter(h=>{const k=h.where+'|'+h.text;if(seen.has(k))return false;seen.add(k);return true;});
 }
-function setUserName(name){userName=cap(name);saveState();
-  const r=`Prazer, ${userName}. Eu sou ${agentName}, seu orquestrador — a sua versão digital. Vou consultar suas personas para te entender e trabalhar como um segundo você.`;
+function setUserName(name){
+  const old=userName; userName=cap(name);
+  // também atualiza o rótulo da persona central, se existir com o nome antigo
+  if(old){ const p=personas().find(n=>n.label.toLowerCase()===old.toLowerCase()); if(p)p.label=userName; }
+  saveState();
+  const r = old
+    ? `Corrigido — agora é ${userName}. Anotado.`
+    : `Prazer, ${userName}. Eu sou ${agentName}, seu orquestrador — a sua versão digital. Vou consultar suas personas para te entender e trabalhar como um segundo você.`;
   showCaption(r);addChat('ai',r);speak(r);}
 function renameAgent(name){const old=agentName;agentName=name.toUpperCase();
   graph.nodes.find(n=>n.kind==='orchestrator').label=agentName;
@@ -2024,7 +2311,23 @@ function renderKbPanel(node){
   const box=document.getElementById('kb-topics');
   const tops=node.topics||[];
   if(!tops.length){box.innerHTML=`<div class="kb-empty">Ainda não sei nada específico sobre ${node.label}.<br>Escreva abaixo ou me conte na conversa (ex: "${node.label} faz aniversário em maio").</div>`;return;}
-  box.innerHTML=tops.map((t,i)=>`<div class="kb-topic"><span class="kb-bullet">▸</span><span>${t.replace(/</g,'&lt;')}</span><button class="kb-rm" onclick="kbRemove(${i})">✕</button></div>`).join('');
+  const lbl={privado:'privado',familia:'família',publico:'público'};
+  box.innerHTML=tops.map((t,i)=>{
+    const txt=topicText(t), vis=topicVis(t);
+    return `<div class="kb-topic"><span class="kb-bullet">▸</span><span>${txt.replace(/</g,'&lt;')}</span>`+
+           `<button class="kb-vis ${vis}" title="Clique para mudar quem pode ver" onclick="kbCycleVis(${i})">${lbl[vis]}</button>`+
+           `<button class="kb-rm" onclick="kbRemove(${i})">✕</button></div>`;
+  }).join('');
+}
+// alterna a visibilidade de um tópico: família → público → privado → família
+function kbCycleVis(i){
+  const node=nodeById(openKbId);if(!node||!node.topics)return;
+  const ordem=['familia','publico','privado'];
+  const cur=node.topics[i];
+  const txt=topicText(cur), v=topicVis(cur);
+  const prox=ordem[(ordem.indexOf(v)+1)%ordem.length];
+  node.topics[i]={t:txt, vis:prox};
+  saveState();renderKbPanel(node);
 }
 function kbAdd(){
   const node=nodeById(openKbId);if(!node)return;
@@ -2079,22 +2382,48 @@ function greeting(){
 }
 // ═══════════ INIT ═══════════
 resize();draw();
-(async()=>{
+
+// bootLocal: inicia o app (visual + dados locais). Chamado após login OU "usar sem conta".
+let _booted=false;
+async function bootLocal(){
+  if(_booted) return; _booted=true;
   const had=await loadState();   // IndexedDB → localStorage
   document.querySelectorAll('.agent-name-ref').forEach(el=>el.textContent=agentName);
   rebuildPositions();updateCount();renderChat();
   enterBrain();  // sempre começa na FASE 1 (cérebro vivo)
-  // aplica a imagem do cérebro no botão Legenda
   const lfb=document.querySelector('.legend-fab-brain');if(lfb)lfb.style.backgroundImage=`url("${IMG_LEGBRAIN}")`;
-  // mostra o botão do Drive só quando houver Client ID configurado
   const gdWrap=document.getElementById('gd-wrap');if(gdWrap)gdWrap.style.display=GDrive.enabled()?'flex':'none';
-  // APRENDIZADO: se a memória de fatos está vazia, popula com o que já existe na rede (uma vez)
   if(had){ Learn.count().then(c=>{ if(c===0)Learn.backfill().then(n=>{ if(n)console.log('[VLLV] memória semântica: '+n+' fatos indexados'); }); }); }
   if(had&&onboarded){
-    setTimeout(()=>{const g=greeting();showCaption(g);speak(g);},700); // fala apenas a saudação; a instrução fica só escrita na tela
+    setTimeout(()=>{const g=greeting();showCaption(g);speak(g);},700);
   }else{
     setTimeout(startOnboarding,700);
   }
+}
+
+// espera o supabase-js do CDN ficar pronto (até ~3s); senão segue em modo local
+function aguardaSupabase(ms){
+  return new Promise(res=>{
+    if(window.supabase) return res(true);
+    const t0=Date.now();
+    const iv=setInterval(()=>{
+      if(window.supabase){ clearInterval(iv); res(true); }
+      else if(Date.now()-t0>ms){ clearInterval(iv); res(false); }
+    },80);
+  });
+}
+// roteador de boot: decide entre mostrar login ou ir direto (sem conta / já logado)
+(async()=>{
+  const pulou = (()=>{ try{ return localStorage.getItem('vllv_skip_auth')==='1'; }catch(e){ return false; } })();
+  if(pulou){ bootLocal(); return; }              // usuário optou por local
+  await aguardaSupabase(3000);                    // dá tempo do CDN carregar
+  if(!sbReady()){ bootLocal(); return; }          // CDN falhou → modo local, não trava
+  initSupabase();
+  try{
+    const { data } = await SB.auth.getSession();
+    if(data && data.session){ sbUser=data.session.user; await onLoggedIn(); return; } // já logado
+  }catch(e){ console.warn('[VLLV] sessão:', e.message); }
+  Auth.show(); // precisa logar
 })();
 
 </script>
