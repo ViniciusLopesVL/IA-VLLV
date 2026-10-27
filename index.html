@@ -473,9 +473,58 @@ async function onLoggedIn(){
     if(sbPerfil && sbPerfil.prf_nome && !userName) userName = sbPerfil.prf_nome;
   }catch(e){ console.warn('[VLLV] perfil:', e.message); }
   const lb=document.getElementById('logout-btn'); if(lb) lb.style.display='grid'; // mostra "sair"
-  bootLocal(); // inicia o app normalmente (visual + dados locais)
-  // (a sincronização pes_conhecimento ↔ Supabase entra no próximo passo)
+  await bootLocal(); // inicia o app normalmente (visual + dados locais)
+  Cloud.puxar();     // traz do Supabase o que já houver (merge não-destrutivo)
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// CLOUD — sincroniza fatos (topics) com t_pes_conhecimento no Supabase.
+// Não-destrutivo: o app segue 100% local; a nuvem é espelho + backup.
+// Só age quando há usuário logado (SB e sbPerfil prontos).
+// ═══════════════════════════════════════════════════════════════════
+const Cloud = {
+  ativo(){ return !!(SB && sbUser && sbPerfil); },
+  // grava/atualiza UM fato no Supabase (chamado quando você ensina algo)
+  async gravarFato(node, texto, visib){
+    if(!this.ativo()) return;
+    try{
+      const trilha = (function(){ const p=[]; let n=node; let g=0;
+        while(n && n.kind!=='orchestrator' && g++<12){ p.unshift(n.label); n=nodeById(n.parent); }
+        return p.join(' › '); })();
+      await SB.from('t_pes_conhecimento').insert({
+        pes_prf_id_dono: sbPerfil.prf_id,
+        pes_rotulo: node.label,
+        pes_conteudo: texto,
+        pes_tipo_no: node.kind || 'knowledge',
+        pes_papel: node.role || null,
+        pes_trilha: trilha,
+        pes_visibilidade: visib || 'familia',
+        // pes_embedding fica null aqui; a Edge Function preenche quando ligarmos o Gemini
+      });
+    }catch(e){ console.warn('[VLLV] Cloud.gravarFato:', e.message); }
+  },
+  // traz do Supabase os fatos do usuário e injeta no grafo que ainda não os tem
+  async puxar(){
+    if(!this.ativo()) return;
+    try{
+      const { data, error } = await SB.from('t_pes_conhecimento')
+        .select('pes_rotulo,pes_conteudo,pes_visibilidade,pes_trilha')
+        .eq('pes_prf_id_dono', sbPerfil.prf_id);
+      if(error || !data) return;
+      let novos=0;
+      for(const row of data){
+        // acha o nó pelo rótulo; se o fato ainda não existe localmente, adiciona
+        const node = graph.nodes.find(n=>(n.kind==='knowledge'||n.kind==='leaf')
+                      && n.label.toLowerCase()===(row.pes_rotulo||'').toLowerCase());
+        if(node && row.pes_conteudo){
+          const existe=(node.topics||[]).some(t=>topicText(t).toLowerCase()===row.pes_conteudo.toLowerCase());
+          if(!existe){ (node.topics=node.topics||[]).push({t:row.pes_conteudo, vis:row.pes_visibilidade||'familia'}); novos++; }
+        }
+      }
+      if(novos){ rebuildPositions(); updateCount(); saveState(); console.log('[VLLV] nuvem → '+novos+' fato(s) trazido(s)'); }
+    }catch(e){ console.warn('[VLLV] Cloud.puxar:', e.message); }
+  }
+};
 
 let mode='ambient';let coreState='idle';let detailId=null;
 let agentName='VLLV';let userName=null;let chatLog=[];
@@ -952,6 +1001,7 @@ function addTopic(node,txt,vis){
     const visibilidade = vis || Intel.classifica(t);          // classifica sozinho se não vier definido
     node.topics.push({t, vis:visibilidade});                  // novo formato {t, vis}
     Learn.remember(t,node.id,'conversa');                     // APRENDE: grava na memória semântica
+    Cloud.gravarFato(node, t, visibilidade);                  // espelha na nuvem (se logado)
   }
   // vira nó de conhecimento (deixa de ser folha) para poder abrir o painel
   if(node.kind==='leaf')node.kind='knowledge';
